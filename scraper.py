@@ -254,20 +254,60 @@ def scrape_nos():
         print("[nos] {}".format(e))
     return items[:5]
 
-def scrape_reddit_hot(subreddit):
-    items = []
+_reddit_token = {"token": None, "fetched_at": 0}
+
+def get_reddit_token():
+    """Get OAuth token using client credentials."""
+    if time.time() - _reddit_token["fetched_at"] < 3000:
+        return _reddit_token["token"]
+    import os
+    client_id = os.environ.get("REDDIT_CLIENT_ID")
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        print("[reddit] No credentials found")
+        return None
     try:
-        time.sleep(random.uniform(0.3, 0.8))
-        r = requests.get(
-            "https://www.reddit.com/r/{}/hot.json?limit=8".format(subreddit),
+        r = requests.post(
+            "https://www.reddit.com/api/v1/access_token",
+            auth=(client_id, client_secret),
+            data={"grant_type": "client_credentials"},
             headers={"User-Agent": "Trentradar/1.0 (cultural trend research tool)"},
             timeout=8
         )
         if r.status_code == 200:
+            token = r.json().get("access_token")
+            _reddit_token["token"] = token
+            _reddit_token["fetched_at"] = time.time()
+            print("[reddit] OAuth token obtained")
+            return token
+        else:
+            print("[reddit] Token request failed: {}".format(r.status_code))
+    except Exception as e:
+        print("[reddit token] {}".format(e))
+    return None
+
+def scrape_reddit_hot(subreddit):
+    items = []
+    try:
+        time.sleep(random.uniform(0.3, 0.8))
+        token = get_reddit_token()
+        if token:
+            headers = {
+                "Authorization": "Bearer {}".format(token),
+                "User-Agent": "Trentradar/1.0 (cultural trend research tool)"
+            }
+            url = "https://oauth.reddit.com/r/{}/hot?limit=10".format(subreddit)
+        else:
+            # Fallback without auth
+            headers = {"User-Agent": "Trentradar/1.0 (cultural trend research tool)"}
+            url = "https://www.reddit.com/r/{}/hot.json?limit=10".format(subreddit)
+
+        r = requests.get(url, headers=headers, timeout=8)
+        if r.status_code == 200:
             data = r.json()
             for post in data["data"]["children"]:
                 p = post["data"]
-                if not p.get("stickied") and p.get("title") and p.get("score", 0) > 50:
+                if not p.get("stickied") and p.get("title") and p.get("score", 0) > 20:
                     items.append({
                         "title": p["title"],
                         "url": "https://www.reddit.com" + p["permalink"],
@@ -275,6 +315,8 @@ def scrape_reddit_hot(subreddit):
                         "type": "reddit",
                         "score": p.get("score", 0)
                     })
+        else:
+            print("[reddit/{}] status {}".format(subreddit, r.status_code))
     except Exception as e:
         print("[reddit/{}] {}".format(subreddit, e))
     return items[:5]
@@ -351,9 +393,26 @@ def scrape_cpnb_bestsellers():
 def gather_all(region="nl"):
     """Run all scrapers in parallel with polite delays."""
     all_items = []
-    subreddits = ["Netherlands", "europe", "psychology", "TrueOffMyChest"]
-    if region != "nl":
-        subreddits = ["worldnews", "europe", "sociology", "psychology"]
+
+    # Human-focused subreddits — personal stories, relationships, lifestyle, culture
+    if region == "nl":
+        subreddits = [
+            "Netherlands",          # Dutch community — local culture and life
+            "TrueOffMyChest",       # Raw personal stories
+            "relationship_advice",  # Relationships, family, modern love
+            "AmItheAsshole",        # Moral dilemmas, family dynamics
+            "antiwork",             # Work culture, burnout, career
+            "lonely",               # Loneliness, connection
+        ]
+    else:
+        subreddits = [
+            "TrueOffMyChest",
+            "relationship_advice",
+            "AmItheAsshole",
+            "antiwork",
+            "Millennials",
+            "GenZ",
+        ]
 
     scrapers = [
         scrape_nu, scrape_ad, scrape_volkskrant, scrape_parool,
@@ -391,4 +450,3 @@ def scrape():
 if __name__ == "__main__":
     import os
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8081)))
-
