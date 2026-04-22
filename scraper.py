@@ -261,8 +261,8 @@ def get_reddit_token():
     if time.time() - _reddit_token["fetched_at"] < 3000:
         return _reddit_token["token"]
     import os
-    client_id = os.environ.get("REDDIT_CLIENT_ID")
-    client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
+    client_id = os.environ.get("R_CLIENT_ID")
+    client_secret = os.environ.get("R_CLIENT_SECRET")
     if not client_id or not client_secret:
         print("[reddit] No credentials found")
         return None
