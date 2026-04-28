@@ -451,9 +451,11 @@ def scrape_google_trends_nl():
                         })
                 if items:
                     print("[google trends] {} items from {}".format(len(items), trend_url))
-                    # Log first item to check context
                     if items:
                         print("[google trends] sample: {}".format(items[0]["title"][:120]))
+                    # Debug: log raw XML of first item
+                    first = root.findall(".//item")[0]
+                    print("[google trends] first item tags: {}".format([child.tag for child in first]))
                     break
             else:
                 print("[google trends] {} status {}".format(trend_url, r.status_code if r else 'None'))
