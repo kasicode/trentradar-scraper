@@ -355,6 +355,46 @@ def scrape_zyte(url, source_name, base_url=None):
 
 _gtrends_cache = {"data": [], "fetched_at": 0}
 
+def scrape_google_news_nl():
+    """Google News NL — reflects what Dutch people are actually reading across all publishers."""
+    items = []
+    feeds = [
+        ("https://news.google.com/rss?hl=nl&gl=NL&ceid=NL:nl", "general"),
+        ("https://news.google.com/rss/topics/CAAqIQgKIhtDQkFTRGdvSUwyMHZNRFZxYUdjU0FtNXNLQUFQAQ?hl=nl&gl=NL&ceid=NL:nl", "top stories"),
+    ]
+    for url, feed_type in feeds:
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=8)
+            if r.status_code == 200:
+                root = ET.fromstring(r.content)
+                seen = set()
+                for item in root.findall(".//item")[:12]:
+                    title_el = item.find("title")
+                    link_el = item.find("link")
+                    source_el = item.find("source")
+                    title = (title_el.text or "").strip()
+                    link = (link_el.text or "").strip()
+                    source = source_el.text.strip() if source_el is not None and source_el.text else "Google News NL"
+                    # Clean up title — Google News appends source name
+                    if " - " in title:
+                        title = title.rsplit(" - ", 1)[0].strip()
+                    if title and len(title) > 15 and title not in seen:
+                        items.append({
+                            "title": title,
+                            "url": link,
+                            "source": "Google News NL",
+                            "publisher": source
+                        })
+                        seen.add(title)
+                if items:
+                    print("[google news nl] {} items".format(len(items)))
+                    break
+            else:
+                print("[google news nl] status {}".format(r.status_code))
+        except Exception as e:
+            print("[google news nl] {}".format(e))
+    return items[:10]
+
 def scrape_international_books():
     """International bestsellers as cultural signal — NYT Books RSS."""
     items = []
@@ -467,6 +507,7 @@ def gather_all(region="nl"):
         scrape_nu, scrape_ad, scrape_volkskrant, scrape_parool,
         scrape_libelle, scrape_linda, scrape_rtl, scrape_nos,
         scrape_google_trends_nl, scrape_international_books,
+        scrape_google_news_nl,
         lambda: scrape_rss_source("https://www.trouw.nl/rss.xml", "Trouw"),
     ]
 
