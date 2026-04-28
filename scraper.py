@@ -274,7 +274,62 @@ def scrape_rss_source(url, source_name, limit=5):
         print("[{}] {}".format(source_name, e))
     return items[:limit]
 
-def scrape_meest_gelezen(base_url, source_name, path="/meest-gelezen"):
+def zyte_get(url, use_browser=True):
+    """Fetch URL via Zyte API — handles JS-rendered pages."""
+    import os
+    api_key = os.environ.get("ZYTE_API_KEY")
+    if not api_key:
+        print("[zyte] No ZYTE_API_KEY found")
+        return None
+    try:
+        response = requests.post(
+            "https://api.zyte.com/v1/extract",
+            auth=(api_key, ""),
+            json={
+                "url": url,
+                "browserHtml": use_browser,
+                "httpResponseBody": not use_browser,
+            },
+            timeout=30
+        )
+        if response.status_code == 200:
+            data = response.json()
+            html = data.get("browserHtml") or data.get("httpResponseBody", "")
+            if isinstance(html, bytes):
+                html = html.decode("utf-8", errors="ignore")
+            return html
+        else:
+            print("[zyte] {} status {}".format(url, response.status_code))
+    except Exception as e:
+        print("[zyte] {}".format(e))
+    return None
+
+def scrape_zyte(url, source_name, base_url=None):
+    """Scrape a meest-gelezen page via Zyte API."""
+    items = []
+    html = zyte_get(url)
+    if not html:
+        return items
+    try:
+        from bs4 import BeautifulSoup as BS
+        soup = BS(html, "html.parser")
+        seen = set()
+        for a in soup.select("h2 a, h3 a, .article__title a, .teaser__title a, [class*='title'] a, article a")[:20]:
+            title = a.get_text(strip=True)
+            href = a.get("href", "")
+            if title and len(title) > 15 and title not in seen:
+                if href.startswith("http"):
+                    link = href
+                elif base_url:
+                    link = base_url + href
+                else:
+                    link = url
+                items.append({"title": title, "url": link, "source": source_name})
+                seen.add(title)
+        print("[zyte/{}] {} items".format(source_name, len(items)))
+    except Exception as e:
+        print("[zyte/{}] parse error: {}".format(source_name, e))
+    return items[:6]
     """Scrape meest-gelezen page for DPG regional papers."""
     items = []
     try:
@@ -440,6 +495,13 @@ def gather_all(region="nl"):
         scrape_google_trends_nl, scrape_international_books,
         lambda: scrape_rss_source("https://www.trouw.nl/rss.xml", "Trouw"),
         lambda: scrape_rss_source("https://www.veronicasuperguide.nl/rss.xml", "Veronica Superguide"),
+        lambda: scrape_zyte("https://www.destentor.nl/meest-gelezen", "De Stentor", "https://www.destentor.nl"),
+        lambda: scrape_zyte("https://www.pzc.nl/meest-gelezen", "PZC", "https://www.pzc.nl"),
+        lambda: scrape_zyte("https://www.bd.nl/meest-gelezen", "Brabants Dagblad", "https://www.bd.nl"),
+        lambda: scrape_zyte("https://www.bndestem.nl/meest-gelezen", "BN De Stem", "https://www.bndestem.nl"),
+        lambda: scrape_zyte("https://www.gelderlander.nl/meest-gelezen", "De Gelderlander", "https://www.gelderlander.nl"),
+        lambda: scrape_zyte("https://www.ed.nl/meest-gelezen", "Eindhovens Dagblad", "https://www.ed.nl"),
+        lambda: scrape_zyte("https://www.tubantia.nl/meest-gelezen", "Tubantia", "https://www.tubantia.nl"),
     ]
 
     with ThreadPoolExecutor(max_workers=8) as executor:
