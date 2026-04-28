@@ -351,43 +351,67 @@ def scrape_google_trends_nl():
     _gtrends_cache["fetched_at"] = time.time()
     return items
 
-def scrape_cpnb_bestsellers():
-    """CPNB Bestseller 60 - Dutch book bestseller list."""
+def scrape_books():
+    """Dutch book bestsellers via multiple sources."""
     items = []
-    try:
-        soup = safe_soup("https://www.cpnb.nl/bestseller-60")
-        if not soup:
-            soup = safe_soup("https://www.bestseller60.nl")
-        if soup:
-            seen = set()
-            for el in soup.select(".book-title, .title, h2, h3, .bestseller-item")[:15]:
-                title = el.get_text(strip=True)
-                if title and len(title) > 3 and title not in seen and len(title) < 100:
-                    items.append({
-                        "title": title,
-                        "url": "https://www.cpnb.nl/bestseller-60",
-                        "source": "CPNB Bestseller 60",
-                        "type": "books"
-                    })
-                    seen.add(title)
-    except Exception as e:
-        print("[cpnb] {}".format(e))
 
-    # Fallback: Hebban.nl popular books
+    # Try Hebban.nl - Dutch book community
+    try:
+        time.sleep(random.uniform(0.5, 1.0))
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "nl-NL,nl;q=0.9",
+            "Referer": "https://www.google.nl/",
+        }
+        r = requests.get("https://www.hebban.nl/boeken/bestsellers", headers=headers, timeout=8)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, "html.parser")
+            seen = set()
+            for a in soup.select("h2 a, h3 a, .book-title a, .title a, [class*='book'] a")[:12]:
+                title = a.get_text(strip=True)
+                href = a.get("href", "")
+                if title and len(title) > 3 and title not in seen and len(title) < 100:
+                    url = href if href.startswith("http") else "https://www.hebban.nl" + href
+                    items.append({"title": title, "url": url, "source": "Hebban.nl", "type": "books"})
+                    seen.add(title)
+        print("[hebban] {} items, status {}".format(len(items), r.status_code))
+    except Exception as e:
+        print("[hebban] {}".format(e))
+
+    # Try CPNB as fallback
     if not items:
         try:
-            soup = safe_soup("https://www.hebban.nl/boeken/bestsellers")
-            if soup:
+            r = requests.get("https://www.cpnb.nl/bestseller-60", headers=headers, timeout=8)
+            if r.status_code == 200:
+                soup = BeautifulSoup(r.text, "html.parser")
                 seen = set()
-                for a in soup.select("h2 a, h3 a, .book-title a, .title a")[:10]:
-                    title = a.get_text(strip=True)
-                    href = a.get("href", "")
-                    if title and len(title) > 3 and title not in seen:
-                        url = href if href.startswith("http") else "https://www.hebban.nl" + href
-                        items.append({"title": title, "url": url, "source": "Hebban.nl", "type": "books"})
+                for el in soup.select("h2 a, h3 a, .book-title, .title")[:12]:
+                    title = el.get_text(strip=True)
+                    if title and len(title) > 3 and title not in seen and len(title) < 100:
+                        items.append({"title": title, "url": "https://www.cpnb.nl/bestseller-60", "source": "CPNB Bestseller 60", "type": "books"})
                         seen.add(title)
+            print("[cpnb] {} items, status {}".format(len(items), r.status_code))
         except Exception as e:
-            print("[hebban] {}".format(e))
+            print("[cpnb] {}".format(e))
+
+    # Try Reddit r/bookclub and r/books for Dutch reading trends
+    if not items:
+        try:
+            r = requests.get(
+                "https://www.reddit.com/r/DutchBookclub/hot.json?limit=5",
+                headers={"User-Agent": "Trentradar/1.0"},
+                timeout=8
+            )
+            if r.status_code == 200:
+                data = r.json()
+                for post in data["data"]["children"]:
+                    p = post["data"]
+                    if not p.get("stickied") and p.get("title"):
+                        items.append({"title": p["title"], "url": "https://www.reddit.com" + p["permalink"], "source": "Hebban.nl", "type": "books"})
+        except Exception as e:
+            print("[books/reddit] {}".format(e))
+
     return items[:8]
 
 def gather_all(region="nl"):
@@ -417,7 +441,7 @@ def gather_all(region="nl"):
     scrapers = [
         scrape_nu, scrape_ad, scrape_volkskrant, scrape_parool,
         scrape_libelle, scrape_linda, scrape_rtl, scrape_nos,
-        scrape_google_trends_nl, scrape_cpnb_bestsellers
+        scrape_google_trends_nl, scrape_books
     ]
     scrapers += [lambda s=s: scrape_reddit_hot(s) for s in subreddits]
 
