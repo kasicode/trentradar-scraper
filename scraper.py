@@ -516,14 +516,6 @@ def gather_all(region="nl"):
         scrape_libelle, scrape_linda, scrape_rtl, scrape_nos,
         scrape_google_trends_nl, scrape_international_books,
         lambda: scrape_rss_source("https://www.trouw.nl/rss.xml", "Trouw"),
-        lambda: scrape_rss_source("https://www.veronicasuperguide.nl/rss.xml", "Veronica Superguide"),
-        lambda: scrape_zyte("https://www.destentor.nl/meest-gelezen", "De Stentor", "https://www.destentor.nl"),
-        lambda: scrape_zyte("https://www.pzc.nl/meest-gelezen", "PZC", "https://www.pzc.nl"),
-        lambda: scrape_zyte("https://www.bd.nl/meest-gelezen", "Brabants Dagblad", "https://www.bd.nl"),
-        lambda: scrape_zyte("https://www.bndestem.nl/meest-gelezen", "BN De Stem", "https://www.bndestem.nl"),
-        lambda: scrape_zyte("https://www.gelderlander.nl/meest-gelezen", "De Gelderlander", "https://www.gelderlander.nl"),
-        lambda: scrape_zyte("https://www.ed.nl/meest-gelezen", "Eindhovens Dagblad", "https://www.ed.nl"),
-        lambda: scrape_zyte("https://www.tubantia.nl/meest-gelezen", "Tubantia", "https://www.tubantia.nl"),
     ]
 
     with ThreadPoolExecutor(max_workers=8) as executor:
