@@ -438,13 +438,6 @@ def gather_all(region="nl"):
         scrape_nu, scrape_ad, scrape_volkskrant, scrape_parool,
         scrape_libelle, scrape_linda, scrape_rtl, scrape_nos,
         scrape_google_trends_nl, scrape_international_books,
-        lambda: scrape_rss_source("https://www.destentor.nl/rss.xml", "De Stentor"),
-        lambda: scrape_rss_source("https://www.pzc.nl/rss.xml", "PZC"),
-        lambda: scrape_rss_source("https://www.bd.nl/rss.xml", "Brabants Dagblad"),
-        lambda: scrape_rss_source("https://www.bndestem.nl/rss.xml", "BN De Stem"),
-        lambda: scrape_rss_source("https://www.gelderlander.nl/rss.xml", "De Gelderlander"),
-        lambda: scrape_rss_source("https://www.ed.nl/rss.xml", "Eindhovens Dagblad"),
-        lambda: scrape_rss_source("https://www.tubantia.nl/rss.xml", "Tubantia"),
         lambda: scrape_rss_source("https://www.trouw.nl/rss.xml", "Trouw"),
         lambda: scrape_rss_source("https://www.veronicasuperguide.nl/rss.xml", "Veronica Superguide"),
     ]
