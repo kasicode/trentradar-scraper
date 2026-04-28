@@ -311,12 +311,41 @@ def scrape_google_trends_nl():
                 for item in root.findall(".//item")[:12]:
                     title_el = item.find("title")
                     traffic_el = item.find("ht:approx_traffic", ns)
+                    desc_el = item.find("description")
                     title = title_el.text.strip() if title_el is not None and title_el.text else ""
                     traffic = traffic_el.text.strip() if traffic_el is not None and traffic_el.text else ""
+
+                    # Extract context from related news articles in the feed
+                    context = ""
+                    # Try ht:news_item elements for related article titles
+                    news_items = item.findall("ht:news_item", ns)
+                    if news_items:
+                        news_titles = []
+                        for ni in news_items[:2]:
+                            ni_title = ni.find("ht:news_item_title", ns)
+                            ni_source = ni.find("ht:news_item_source", ns)
+                            if ni_title is not None and ni_title.text:
+                                src = " ({})".format(ni_source.text) if ni_source is not None and ni_source.text else ""
+                                news_titles.append(ni_title.text.strip() + src)
+                        if news_titles:
+                            context = " — " + " / ".join(news_titles)
+
+                    # Fallback: use description if no news items
+                    if not context and desc_el is not None and desc_el.text:
+                        import re as _re
+                        clean = _re.sub(r"<[^>]+>", "", desc_el.text).strip()[:150]
+                        if clean and clean.lower() != title.lower():
+                            context = " — " + clean
+
                     if title:
                         search_url = "https://trends.google.com/trends/explore?q=" + requests.utils.quote(title) + "&geo=NL"
+                        full_title = title
+                        if traffic:
+                            full_title += " ({} searches)".format(traffic)
+                        if context:
+                            full_title += context
                         items.append({
-                            "title": title + (" ({} searches)".format(traffic) if traffic else ""),
+                            "title": full_title,
                             "url": search_url,
                             "source": "Google Trends NL",
                             "type": "trends"
@@ -327,6 +356,9 @@ def scrape_google_trends_nl():
                 print("[google trends] {} status {}".format(trend_url, r.status_code if r else 'None'))
         except Exception as e:
             print("[google trends] {} - {}".format(trend_url, e))
+    _gtrends_cache["data"] = items
+    _gtrends_cache["fetched_at"] = time.time()
+    return items
     _gtrends_cache["data"] = items
     _gtrends_cache["fetched_at"] = time.time()
     return items
