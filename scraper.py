@@ -394,7 +394,7 @@ def scrape_international_books():
     return items[:6]
 
 def scrape_google_trends_nl():
-    if time.time() - _gtrends_cache["fetched_at"] < 300:
+    if time.time() - _gtrends_cache["fetched_at"] < 1800:
         return _gtrends_cache["data"]
     items = []
     trend_urls = [
@@ -449,12 +449,7 @@ def scrape_google_trends_nl():
                             "type": "trends"
                         })
                 if items:
-                    print("[google trends] {} items from {}".format(len(items), trend_url))
-                    if items:
-                        print("[google trends] sample: {}".format(items[0]["title"][:120]))
-                    # Debug: log raw XML of first item
-                    first = root.findall(".//item")[0]
-                    print("[google trends] first item tags: {}".format([child.tag for child in first]))
+                    print("[google trends] {} items".format(len(items)))
                     break
             else:
                 print("[google trends] {} status {}".format(trend_url, r.status_code if r else 'None'))
