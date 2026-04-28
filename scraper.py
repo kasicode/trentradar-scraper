@@ -327,26 +327,35 @@ def scrape_google_trends_nl():
     if time.time() - _gtrends_cache["fetched_at"] < 1800:
         return _gtrends_cache["data"]
     items = []
-    try:
-        r = polite_get("https://trends.google.com/trends/trendingsearches/daily/rss?geo=NL")
-        if r and r.status_code == 200:
-            root = ET.fromstring(r.content)
-            ns = {"ht": "https://trends.google.com/trends/trendingsearches/daily"}
-            for item in root.findall(".//item")[:12]:
-                title_el = item.find("title")
-                traffic_el = item.find("ht:approx_traffic", ns)
-                title = title_el.text.strip() if title_el is not None and title_el.text else ""
-                traffic = traffic_el.text.strip() if traffic_el is not None and traffic_el.text else ""
-                if title:
-                    search_url = "https://trends.google.com/trends/explore?q=" + requests.utils.quote(title) + "&geo=NL"
-                    items.append({
-                        "title": title + (" ({} searches)".format(traffic) if traffic else ""),
-                        "url": search_url,
-                        "source": "Google Trends NL",
-                        "type": "trends"
-                    })
-    except Exception as e:
-        print("[google trends] {}".format(e))
+    trend_urls = [
+        "https://trends.google.com/trending/rss?geo=NL",
+        "https://trends.google.com/trends/trendingsearches/daily/rss?geo=NL",
+    ]
+    for trend_url in trend_urls:
+        try:
+            r = polite_get(trend_url)
+            if r and r.status_code == 200:
+                root = ET.fromstring(r.content)
+                ns = {"ht": "https://trends.google.com/trends/trendingsearches/daily"}
+                for item in root.findall(".//item")[:12]:
+                    title_el = item.find("title")
+                    traffic_el = item.find("ht:approx_traffic", ns)
+                    title = title_el.text.strip() if title_el is not None and title_el.text else ""
+                    traffic = traffic_el.text.strip() if traffic_el is not None and traffic_el.text else ""
+                    if title:
+                        search_url = "https://trends.google.com/trends/explore?q=" + requests.utils.quote(title) + "&geo=NL"
+                        items.append({
+                            "title": title + (" ({} searches)".format(traffic) if traffic else ""),
+                            "url": search_url,
+                            "source": "Google Trends NL",
+                            "type": "trends"
+                        })
+                if items:
+                    break
+            else:
+                print("[google trends] {} status {}".format(trend_url, r.status_code if r else 'None'))
+        except Exception as e:
+            print("[google trends] {} - {}".format(trend_url, e))
     _gtrends_cache["data"] = items
     _gtrends_cache["fetched_at"] = time.time()
     return items
@@ -355,7 +364,7 @@ def scrape_books():
     """Dutch book bestsellers via multiple sources."""
     items = []
 
-    # Try Hebban.nl - Dutch book community
+    # Try Bruna Bestseller 60 - clean URL without tracking params
     try:
         time.sleep(random.uniform(0.5, 1.0))
         headers = {
@@ -364,53 +373,51 @@ def scrape_books():
             "Accept-Language": "nl-NL,nl;q=0.9",
             "Referer": "https://www.google.nl/",
         }
-        r = requests.get("https://www.hebban.nl/boeken/bestsellers", headers=headers, timeout=8)
+        r = requests.get("https://www.bruna.nl/bestseller/de-bestseller-60", headers=headers, timeout=10)
+        print("[bruna] status {}".format(r.status_code))
         if r.status_code == 200:
             soup = BeautifulSoup(r.text, "html.parser")
             seen = set()
-            for a in soup.select("h2 a, h3 a, .book-title a, .title a, [class*='book'] a")[:12]:
-                title = a.get_text(strip=True)
-                href = a.get("href", "")
-                if title and len(title) > 3 and title not in seen and len(title) < 100:
-                    url = href if href.startswith("http") else "https://www.hebban.nl" + href
-                    items.append({"title": title, "url": url, "source": "Hebban.nl", "type": "books"})
-                    seen.add(title)
-        print("[hebban] {} items, status {}".format(len(items), r.status_code))
+            for selector in ["h2 a", "h3 a", ".product-title a", ".title a",
+                            "[class*='title'] a", "[class*='product'] a",
+                            "article a", ".card a"]:
+                for a in soup.select(selector)[:20]:
+                    title = a.get_text(strip=True)
+                    href = a.get("href", "")
+                    if title and 5 < len(title) < 100 and title not in seen:
+                        url = href if href.startswith("http") else "https://www.bruna.nl" + href
+                        items.append({"title": title, "url": url, "source": "Bruna Bestseller 60", "type": "books"})
+                        seen.add(title)
+                if items:
+                    break
+        print("[bruna] {} items".format(len(items)))
     except Exception as e:
-        print("[hebban] {}".format(e))
+        print("[bruna] {}".format(e))
 
-    # Try CPNB as fallback
+    # Fallback: Hebban.nl
     if not items:
         try:
-            r = requests.get("https://www.cpnb.nl/bestseller-60", headers=headers, timeout=8)
+            time.sleep(random.uniform(0.5, 1.0))
+            r = requests.get("https://www.hebban.nl/boeken/bestsellers", headers=headers, timeout=8)
+            print("[hebban] status {}".format(r.status_code))
             if r.status_code == 200:
                 soup = BeautifulSoup(r.text, "html.parser")
                 seen = set()
-                for el in soup.select("h2 a, h3 a, .book-title, .title")[:12]:
-                    title = el.get_text(strip=True)
-                    if title and len(title) > 3 and title not in seen and len(title) < 100:
-                        items.append({"title": title, "url": "https://www.cpnb.nl/bestseller-60", "source": "CPNB Bestseller 60", "type": "books"})
-                        seen.add(title)
-            print("[cpnb] {} items, status {}".format(len(items), r.status_code))
+                for selector in ["h2 a", "h3 a", ".book-title a", ".title a",
+                                "[class*='book'] a", "[class*='title'] a",
+                                "article a", ".card a", ".item a", "li a"]:
+                    for a in soup.select(selector)[:15]:
+                        title = a.get_text(strip=True)
+                        href = a.get("href", "")
+                        if title and 5 < len(title) < 100 and title not in seen and "/boek" in href:
+                            url = href if href.startswith("http") else "https://www.hebban.nl" + href
+                            items.append({"title": title, "url": url, "source": "Hebban.nl", "type": "books"})
+                            seen.add(title)
+                    if items:
+                        break
+            print("[hebban] {} items".format(len(items)))
         except Exception as e:
-            print("[cpnb] {}".format(e))
-
-    # Try Reddit r/bookclub and r/books for Dutch reading trends
-    if not items:
-        try:
-            r = requests.get(
-                "https://www.reddit.com/r/DutchBookclub/hot.json?limit=5",
-                headers={"User-Agent": "Trentradar/1.0"},
-                timeout=8
-            )
-            if r.status_code == 200:
-                data = r.json()
-                for post in data["data"]["children"]:
-                    p = post["data"]
-                    if not p.get("stickied") and p.get("title"):
-                        items.append({"title": p["title"], "url": "https://www.reddit.com" + p["permalink"], "source": "Hebban.nl", "type": "books"})
-        except Exception as e:
-            print("[books/reddit] {}".format(e))
+            print("[hebban] {}".format(e))
 
     return items[:8]
 
