@@ -271,11 +271,18 @@ def scrape_international_books():
                 for item in root.findall(".//item")[:6]:
                     title_el = item.find("title")
                     link_el = item.find("link")
+                    desc_el = item.find("description")
                     title = (title_el.text or "").strip()
                     link = (link_el.text or "").strip()
+                    desc = ""
+                    if desc_el is not None and desc_el.text:
+                        import re as _re
+                        desc = _re.sub(r"<[^>]+>", "", desc_el.text).strip()[:200]
                     if title and len(title) > 5:
+                        # Combine title and description for richer signal
+                        full_title = title if not desc else "{} — {}".format(title, desc[:100])
                         items.append({
-                            "title": title,
+                            "title": full_title,
                             "url": link,
                             "source": source,
                             "type": "books"
