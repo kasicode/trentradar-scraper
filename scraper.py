@@ -406,7 +406,7 @@ def scrape_google_trends_nl():
             r = polite_get(trend_url)
             if r and r.status_code == 200:
                 root = ET.fromstring(r.content)
-                ns = {"ht": "https://trends.google.com/trends/trendingsearches/daily"}
+                ns = {"ht": "https://trends.google.com/trending/rss"}
                 for item in root.findall(".//item")[:12]:
                     title_el = item.find("title")
                     traffic_el = item.find("ht:approx_traffic", ns)
@@ -414,9 +414,8 @@ def scrape_google_trends_nl():
                     title = title_el.text.strip() if title_el is not None and title_el.text else ""
                     traffic = traffic_el.text.strip() if traffic_el is not None and traffic_el.text else ""
 
-                    # Extract context from related news articles in the feed
+                    # Extract context from related news articles
                     context = ""
-                    # Try ht:news_item elements for related article titles
                     news_items = item.findall("ht:news_item", ns)
                     if news_items:
                         news_titles = []
