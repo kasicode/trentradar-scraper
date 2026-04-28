@@ -254,6 +254,82 @@ def scrape_nos():
         print("[nos] {}".format(e))
     return items[:5]
 
+def scrape_rss_source(url, source_name, limit=5):
+    """Generic RSS scraper for DPG and other sources."""
+    items = []
+    try:
+        r = polite_get(url)
+        if r and r.status_code == 200:
+            root = ET.fromstring(r.content)
+            for item in root.findall(".//item")[:limit]:
+                title_el = item.find("title")
+                link_el = item.find("link")
+                title = (title_el.text or "").strip()
+                link = (link_el.text or "").strip()
+                if title and len(title) > 15:
+                    items.append({"title": title, "url": link, "source": source_name})
+        else:
+            print("[{}] status {}".format(source_name, r.status_code if r else 'None'))
+    except Exception as e:
+        print("[{}] {}".format(source_name, e))
+    return items[:limit]
+
+def scrape_meest_gelezen(base_url, source_name, path="/meest-gelezen"):
+    """Scrape meest-gelezen page for DPG regional papers."""
+    items = []
+    try:
+        r = polite_get(base_url + path)
+        if r and r.status_code == 200:
+            soup = BeautifulSoup(r.text, "html.parser")
+            seen = set()
+            for a in soup.select("h2 a, h3 a, .article__title a, .teaser__title a, [class*='title'] a, article a")[:20]:
+                title = a.get_text(strip=True)
+                href = a.get("href", "")
+                if title and len(title) > 15 and title not in seen:
+                    url = href if href.startswith("http") else base_url + href
+                    items.append({"title": title, "url": url, "source": source_name})
+                    seen.add(title)
+            if not items:
+                print("[{}] 0 items — may be JS-rendered".format(source_name))
+        else:
+            print("[{}] status {}".format(source_name, r.status_code if r else 'None'))
+    except Exception as e:
+        print("[{}] {}".format(source_name, e))
+    return items[:6]
+
+def scrape_trouw():
+    return scrape_meest_gelezen("https://www.trouw.nl", "Trouw")
+
+def scrape_destentor():
+    return scrape_meest_gelezen("https://www.destentor.nl", "De Stentor")
+
+def scrape_pzc():
+    return scrape_meest_gelezen("https://www.pzc.nl", "PZC")
+
+def scrape_bd():
+    return scrape_meest_gelezen("https://www.bd.nl", "Brabants Dagblad")
+
+def scrape_bndestem():
+    return scrape_meest_gelezen("https://www.bndestem.nl", "BN De Stem")
+
+def scrape_gelderlander():
+    return scrape_meest_gelezen("https://www.gelderlander.nl", "De Gelderlander")
+
+def scrape_ed():
+    return scrape_meest_gelezen("https://www.ed.nl", "Eindhovens Dagblad")
+
+def scrape_tubantia():
+    return scrape_meest_gelezen("https://www.tubantia.nl", "Tubantia")
+
+def scrape_rtl_nl():
+    items = scrape_meest_gelezen("https://www.rtl.nl", "RTL.nl", "/meest-bekeken")
+    if not items:
+        items = scrape_rss_source("https://www.rtl.nl/rss.xml", "RTL.nl")
+    return items
+
+def scrape_veronicasuperguide():
+    return scrape_meest_gelezen("https://www.veronicasuperguide.nl", "Veronica Superguide", "/nieuws/populair")
+
 _gtrends_cache = {"data": [], "fetched_at": 0}
 
 def scrape_international_books():
@@ -370,6 +446,9 @@ def gather_all(region="nl"):
     scrapers = [
         scrape_nu, scrape_ad, scrape_volkskrant, scrape_parool,
         scrape_libelle, scrape_linda, scrape_rtl, scrape_nos,
+        scrape_trouw, scrape_destentor, scrape_pzc, scrape_bd,
+        scrape_bndestem, scrape_gelderlander, scrape_ed, scrape_tubantia,
+        scrape_veronicasuperguide, scrape_rtl_nl,
         scrape_google_trends_nl, scrape_international_books
     ]
 
