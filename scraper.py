@@ -254,74 +254,38 @@ def scrape_nos():
         print("[nos] {}".format(e))
     return items[:5]
 
-_reddit_token = {"token": None, "fetched_at": 0}
-
-def get_reddit_token():
-    """Get OAuth token using client credentials."""
-    if time.time() - _reddit_token["fetched_at"] < 3000:
-        return _reddit_token["token"]
-    import os
-    client_id = os.environ.get("R_CLIENT_ID")
-    client_secret = os.environ.get("R_CLIENT_SECRET")
-    if not client_id or not client_secret:
-        print("[reddit] No credentials found")
-        return None
-    try:
-        r = requests.post(
-            "https://www.reddit.com/api/v1/access_token",
-            auth=(client_id, client_secret),
-            data={"grant_type": "client_credentials"},
-            headers={"User-Agent": "Trentradar/1.0 (cultural trend research tool)"},
-            timeout=8
-        )
-        if r.status_code == 200:
-            token = r.json().get("access_token")
-            _reddit_token["token"] = token
-            _reddit_token["fetched_at"] = time.time()
-            print("[reddit] OAuth token obtained")
-            return token
-        else:
-            print("[reddit] Token request failed: {}".format(r.status_code))
-    except Exception as e:
-        print("[reddit token] {}".format(e))
-    return None
-
-def scrape_reddit_hot(subreddit):
-    items = []
-    try:
-        time.sleep(random.uniform(0.3, 0.8))
-        token = get_reddit_token()
-        if token:
-            headers = {
-                "Authorization": "Bearer {}".format(token),
-                "User-Agent": "Trentradar/1.0 (cultural trend research tool)"
-            }
-            url = "https://oauth.reddit.com/r/{}/hot?limit=10".format(subreddit)
-        else:
-            # Fallback without auth
-            headers = {"User-Agent": "Trentradar/1.0 (cultural trend research tool)"}
-            url = "https://www.reddit.com/r/{}/hot.json?limit=10".format(subreddit)
-
-        r = requests.get(url, headers=headers, timeout=8)
-        if r.status_code == 200:
-            data = r.json()
-            for post in data["data"]["children"]:
-                p = post["data"]
-                if not p.get("stickied") and p.get("title") and p.get("score", 0) > 20:
-                    items.append({
-                        "title": p["title"],
-                        "url": "https://www.reddit.com" + p["permalink"],
-                        "source": "r/{}".format(subreddit),
-                        "type": "reddit",
-                        "score": p.get("score", 0)
-                    })
-        else:
-            print("[reddit/{}] status {}".format(subreddit, r.status_code))
-    except Exception as e:
-        print("[reddit/{}] {}".format(subreddit, e))
-    return items[:5]
-
 _gtrends_cache = {"data": [], "fetched_at": 0}
+
+def scrape_international_books():
+    """International bestsellers as cultural signal — NYT Books RSS."""
+    items = []
+    feeds = [
+        ("https://rss.nytimes.com/services/xml/rss/nyt/Books.xml", "NYT Books"),
+        ("https://feeds.feedburner.com/goodreads/YkuY", "Goodreads"),
+    ]
+    for url, source in feeds:
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=8)
+            if r.status_code == 200:
+                root = ET.fromstring(r.content)
+                for item in root.findall(".//item")[:6]:
+                    title_el = item.find("title")
+                    link_el = item.find("link")
+                    title = (title_el.text or "").strip()
+                    link = (link_el.text or "").strip()
+                    if title and len(title) > 5:
+                        items.append({
+                            "title": title,
+                            "url": link,
+                            "source": source,
+                            "type": "books"
+                        })
+                if items:
+                    print("[books/{}] {} items".format(source, len(items)))
+                    break
+        except Exception as e:
+            print("[books/{}] {}".format(source, e))
+    return items[:6]
 
 def scrape_google_trends_nl():
     if time.time() - _gtrends_cache["fetched_at"] < 1800:
@@ -360,97 +324,15 @@ def scrape_google_trends_nl():
     _gtrends_cache["fetched_at"] = time.time()
     return items
 
-def scrape_books():
-    """Dutch book bestsellers via multiple sources."""
-    items = []
-
-    # Try Bruna Bestseller 60 - clean URL without tracking params
-    try:
-        time.sleep(random.uniform(0.5, 1.0))
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "nl-NL,nl;q=0.9",
-            "Referer": "https://www.google.nl/",
-        }
-        r = requests.get("https://www.bruna.nl/bestseller/de-bestseller-60", headers=headers, timeout=10)
-        print("[bruna] status {}".format(r.status_code))
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, "html.parser")
-            seen = set()
-            for selector in ["h2 a", "h3 a", ".product-title a", ".title a",
-                            "[class*='title'] a", "[class*='product'] a",
-                            "article a", ".card a"]:
-                for a in soup.select(selector)[:20]:
-                    title = a.get_text(strip=True)
-                    href = a.get("href", "")
-                    if title and 5 < len(title) < 100 and title not in seen:
-                        url = href if href.startswith("http") else "https://www.bruna.nl" + href
-                        items.append({"title": title, "url": url, "source": "Bruna Bestseller 60", "type": "books"})
-                        seen.add(title)
-                if items:
-                    break
-        print("[bruna] {} items".format(len(items)))
-    except Exception as e:
-        print("[bruna] {}".format(e))
-
-    # Fallback: Hebban.nl
-    if not items:
-        try:
-            time.sleep(random.uniform(0.5, 1.0))
-            r = requests.get("https://www.hebban.nl/boeken/bestsellers", headers=headers, timeout=8)
-            print("[hebban] status {}".format(r.status_code))
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.text, "html.parser")
-                seen = set()
-                for selector in ["h2 a", "h3 a", ".book-title a", ".title a",
-                                "[class*='book'] a", "[class*='title'] a",
-                                "article a", ".card a", ".item a", "li a"]:
-                    for a in soup.select(selector)[:15]:
-                        title = a.get_text(strip=True)
-                        href = a.get("href", "")
-                        if title and 5 < len(title) < 100 and title not in seen and "/boek" in href:
-                            url = href if href.startswith("http") else "https://www.hebban.nl" + href
-                            items.append({"title": title, "url": url, "source": "Hebban.nl", "type": "books"})
-                            seen.add(title)
-                    if items:
-                        break
-            print("[hebban] {} items".format(len(items)))
-        except Exception as e:
-            print("[hebban] {}".format(e))
-
-    return items[:8]
-
 def gather_all(region="nl"):
     """Run all scrapers in parallel with polite delays."""
     all_items = []
 
-    # Human-focused subreddits — personal stories, relationships, lifestyle, culture
-    if region == "nl":
-        subreddits = [
-            "Netherlands",          # Dutch community — local culture and life
-            "TrueOffMyChest",       # Raw personal stories
-            "relationship_advice",  # Relationships, family, modern love
-            "AmItheAsshole",        # Moral dilemmas, family dynamics
-            "antiwork",             # Work culture, burnout, career
-            "lonely",               # Loneliness, connection
-        ]
-    else:
-        subreddits = [
-            "TrueOffMyChest",
-            "relationship_advice",
-            "AmItheAsshole",
-            "antiwork",
-            "Millennials",
-            "GenZ",
-        ]
-
     scrapers = [
         scrape_nu, scrape_ad, scrape_volkskrant, scrape_parool,
         scrape_libelle, scrape_linda, scrape_rtl, scrape_nos,
-        scrape_google_trends_nl, scrape_books
+        scrape_google_trends_nl, scrape_international_books
     ]
-    scrapers += [lambda s=s: scrape_reddit_hot(s) for s in subreddits]
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {executor.submit(fn): fn for fn in scrapers}
