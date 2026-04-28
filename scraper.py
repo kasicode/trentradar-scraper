@@ -314,19 +314,41 @@ def scrape_zyte(url, source_name, base_url=None):
         from bs4 import BeautifulSoup as BS
         soup = BS(html, "html.parser")
         seen = set()
-        for a in soup.select("h2 a, h3 a, .article__title a, .teaser__title a, [class*='title'] a, article a")[:20]:
-            title = a.get_text(strip=True)
-            href = a.get("href", "")
-            if title and len(title) > 15 and title not in seen:
-                if href.startswith("http"):
-                    link = href
-                elif base_url:
-                    link = base_url + href
-                else:
-                    link = url
-                items.append({"title": title, "url": link, "source": source_name})
-                seen.add(title)
+        # DPG Media regional sites use these selectors
+        selectors = [
+            "h2 a", "h3 a",
+            ".article__title a",
+            ".teaser__title a",
+            ".card__title a",
+            "[class*='title'] a",
+            "[class*='heading'] a",
+            "[class*='article'] a",
+            "article a",
+            "li a",
+            "a[href*='/nieuws/']",
+            "a[href*='/sport/']",
+            "a[href*='/entertainment/']",
+            "a[href*='/life/']",
+        ]
+        for selector in selectors:
+            for a in soup.select(selector)[:25]:
+                title = a.get_text(strip=True)
+                href = a.get("href", "")
+                if title and len(title) > 20 and title not in seen:
+                    if href.startswith("http"):
+                        link = href
+                    elif href.startswith("/") and base_url:
+                        link = base_url + href
+                    else:
+                        continue
+                    items.append({"title": title, "url": link, "source": source_name})
+                    seen.add(title)
+            if len(items) >= 4:
+                break
         print("[zyte/{}] {} items".format(source_name, len(items)))
+        if not items:
+            # Log a snippet to help debug selectors
+            print("[zyte/{}] HTML snippet: {}".format(source_name, html[1000:1300]))
     except Exception as e:
         print("[zyte/{}] parse error: {}".format(source_name, e))
     return items[:6]
