@@ -352,51 +352,6 @@ def scrape_zyte(url, source_name, base_url=None):
     except Exception as e:
         print("[zyte/{}] parse error: {}".format(source_name, e))
     return items[:6]
-    """Scrape meest-gelezen page for DPG regional papers."""
-    items = []
-    try:
-        r = polite_get(base_url + path)
-        if r and r.status_code == 200:
-            soup = BeautifulSoup(r.text, "html.parser")
-            seen = set()
-            for a in soup.select("h2 a, h3 a, .article__title a, .teaser__title a, [class*='title'] a, article a")[:20]:
-                title = a.get_text(strip=True)
-                href = a.get("href", "")
-                if title and len(title) > 15 and title not in seen:
-                    url = href if href.startswith("http") else base_url + href
-                    items.append({"title": title, "url": url, "source": source_name})
-                    seen.add(title)
-            if not items:
-                print("[{}] 0 items — may be JS-rendered".format(source_name))
-        else:
-            print("[{}] status {}".format(source_name, r.status_code if r else 'None'))
-    except Exception as e:
-        print("[{}] {}".format(source_name, e))
-    return items[:6]
-
-def scrape_trouw():
-    return scrape_meest_gelezen("https://www.trouw.nl", "Trouw")
-
-def scrape_destentor():
-    return scrape_meest_gelezen("https://www.destentor.nl", "De Stentor")
-
-def scrape_pzc():
-    return scrape_meest_gelezen("https://www.pzc.nl", "PZC")
-
-def scrape_bd():
-    return scrape_meest_gelezen("https://www.bd.nl", "Brabants Dagblad")
-
-def scrape_bndestem():
-    return scrape_meest_gelezen("https://www.bndestem.nl", "BN De Stem")
-
-def scrape_gelderlander():
-    return scrape_meest_gelezen("https://www.gelderlander.nl", "De Gelderlander")
-
-def scrape_ed():
-    return scrape_meest_gelezen("https://www.ed.nl", "Eindhovens Dagblad")
-
-def scrape_tubantia():
-    return scrape_meest_gelezen("https://www.tubantia.nl", "Tubantia")
 
 _gtrends_cache = {"data": [], "fetched_at": 0}
 
@@ -439,7 +394,7 @@ def scrape_international_books():
     return items[:6]
 
 def scrape_google_trends_nl():
-    if time.time() - _gtrends_cache["fetched_at"] < 1800:
+    if time.time() - _gtrends_cache["fetched_at"] < 300:
         return _gtrends_cache["data"]
     items = []
     trend_urls = [
@@ -495,14 +450,15 @@ def scrape_google_trends_nl():
                             "type": "trends"
                         })
                 if items:
+                    print("[google trends] {} items from {}".format(len(items), trend_url))
+                    # Log first item to check context
+                    if items:
+                        print("[google trends] sample: {}".format(items[0]["title"][:120]))
                     break
             else:
                 print("[google trends] {} status {}".format(trend_url, r.status_code if r else 'None'))
         except Exception as e:
             print("[google trends] {} - {}".format(trend_url, e))
-    _gtrends_cache["data"] = items
-    _gtrends_cache["fetched_at"] = time.time()
-    return items
     _gtrends_cache["data"] = items
     _gtrends_cache["fetched_at"] = time.time()
     return items
