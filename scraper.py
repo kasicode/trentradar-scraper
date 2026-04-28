@@ -321,15 +321,6 @@ def scrape_ed():
 def scrape_tubantia():
     return scrape_meest_gelezen("https://www.tubantia.nl", "Tubantia")
 
-def scrape_rtl_nl():
-    items = scrape_meest_gelezen("https://www.rtl.nl", "RTL.nl", "/meest-bekeken")
-    if not items:
-        items = scrape_rss_source("https://www.rtl.nl/rss.xml", "RTL.nl")
-    return items
-
-def scrape_veronicasuperguide():
-    return scrape_meest_gelezen("https://www.veronicasuperguide.nl", "Veronica Superguide", "/nieuws/populair")
-
 _gtrends_cache = {"data": [], "fetched_at": 0}
 
 def scrape_international_books():
@@ -446,10 +437,16 @@ def gather_all(region="nl"):
     scrapers = [
         scrape_nu, scrape_ad, scrape_volkskrant, scrape_parool,
         scrape_libelle, scrape_linda, scrape_rtl, scrape_nos,
-        scrape_trouw, scrape_destentor, scrape_pzc, scrape_bd,
-        scrape_bndestem, scrape_gelderlander, scrape_ed, scrape_tubantia,
-        scrape_veronicasuperguide, scrape_rtl_nl,
-        scrape_google_trends_nl, scrape_international_books
+        scrape_google_trends_nl, scrape_international_books,
+        lambda: scrape_rss_source("https://www.destentor.nl/rss.xml", "De Stentor"),
+        lambda: scrape_rss_source("https://www.pzc.nl/rss.xml", "PZC"),
+        lambda: scrape_rss_source("https://www.bd.nl/rss.xml", "Brabants Dagblad"),
+        lambda: scrape_rss_source("https://www.bndestem.nl/rss.xml", "BN De Stem"),
+        lambda: scrape_rss_source("https://www.gelderlander.nl/rss.xml", "De Gelderlander"),
+        lambda: scrape_rss_source("https://www.ed.nl/rss.xml", "Eindhovens Dagblad"),
+        lambda: scrape_rss_source("https://www.tubantia.nl/rss.xml", "Tubantia"),
+        lambda: scrape_rss_source("https://www.trouw.nl/rss.xml", "Trouw"),
+        lambda: scrape_rss_source("https://www.veronicasuperguide.nl/rss.xml", "Veronica Superguide"),
     ]
 
     with ThreadPoolExecutor(max_workers=8) as executor:
